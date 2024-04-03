@@ -5,6 +5,8 @@ Simple clock using the TTGO T4 V1.3 development board.
 
 See board [schema](etc/T4_v1.3.pdf).
 
+<img src="etc/ttgot4clock.jpg" width="30%" height="30%">
+
 Building
 --------
 
