@@ -37,15 +37,15 @@ jobs:
       run: |
         cp -f test/config.ini data/config.ini
         pio run
-    - name: Unit Tests
-      run: |
-        sed -i 's/ -Wl,-Bstatic//g' platformio.ini
-        pio test -e native
     - name: Upload Build Artifact
       uses: actions/upload-artifact@v3
       with:
         name: firmware
         path: .pio/build/ttgo-t4-v13/firmware.*
+    - name: Unit Tests
+      run: |
+        sed -i 's/ -Wl,-Bstatic//g' platformio.ini
+        pio test -e native
     - name: Upload Coverage Artifact
       uses: actions/upload-artifact@v3
       with:
