@@ -32,7 +32,9 @@ jobs:
         pip install --upgrade platformio
         pio update
     - name: Build ESP32 Firmware
-      run: pio run
+      run: |
+        cp -f test/config.ini data/config.ini
+        pio run
     - name: Unit Tests
       run: pio test -e native
     - name: Upload Artifact
