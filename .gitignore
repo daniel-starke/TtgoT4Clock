@@ -6,3 +6,4 @@
 
 # Build files
 .pio
+test/__pycache__

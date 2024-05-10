@@ -1,3 +1,9 @@
+"""
+@file addr2line.py
+@author Daniel Starke
+@date 2024-05-09
+@version 2024-05-09
+
 Copyright (c) 2024 Daniel Starke
 
 Permission is hereby granted, free of charge, to any person obtaining
@@ -18,3 +24,20 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
 LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+"""
+
+import os
+import sys
+import subprocess
+from platformio.package.manager.tool import ToolPackageManager
+from platformio.package.commands.exec import inject_pkg_to_environ
+
+def app():
+	pm = ToolPackageManager()
+	pkg = pm.get_package('toolchain-xtensa-esp32')
+	assert pkg
+	inject_pkg_to_environ(pkg)
+	subprocess.run(['xtensa-esp32-elf-addr2line'] + sys.argv[1:], env = os.environ, check = False)
+
+if __name__ == '__main__':
+	app()

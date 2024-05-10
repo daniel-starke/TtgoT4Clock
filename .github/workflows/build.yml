@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Cache pip
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    - name: Cache PlatformIO
+      uses: actions/cache@v3
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+    - name: Setup Python
+      uses: actions/setup-python@v3
+    - name: Install PlatformIO
+      run: |
+        python -m pip install --upgrade pip
+        pip install --upgrade platformio
+        pio update
+    - name: Build ESP32 Firmware
+      run: pio run
+    - name: Unit Tests
+      run: pio test -e native
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: binaries
+        path: |
+          .pio/build/ttgo-t4-v13/firmware.elf
+          .pio/build/ttgo-t4-v13/firmware.bin
+          .pio/coverage

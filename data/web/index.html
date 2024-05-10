@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<!--
+@file index.html
+@author Daniel Starke
+@date 2024-04-28
+@version 2024-05-06
+
+Copyright (c) 2024 Daniel Starke
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+"Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TTGO T4 Clock</title>
+<style>
+html {
+	height: calc(100% - 2em);
+}
+
+body {
+	font-size: 18pt;
+	display: block;
+	margin-left: auto;
+	margin-right: auto;
+	width: 90%;
+	height: 100%;
+	font-family: Fira code, Fira Mono, Consolas, Menlo, Courier, monospace;
+	line-height: 1.5;
+}
+
+table {
+	width: 30rem;
+	margin-left: auto;
+	margin-right: auto;
+	border-collapse: collapse;
+	table-layout: fixed;
+}
+
+tr th {
+	padding-left: 1rem;
+	padding-right: 0.4rem;
+	text-align: left;
+	vertical-align: middle;
+	border-radius: 0.7rem 0.7rem 0 0;
+}
+
+tr td {
+	padding-left: 0.4rem;
+	padding-right: 0.4rem;
+	vertical-align: middle;
+}
+
+.title {
+	background-image: linear-gradient(to bottom, #DDD 50%, #EEE 100%);
+}
+
+.param {
+	background-color: #EEE;
+}
+
+.spacer {
+	height: 0.4rem;
+	background-color: #FFF;
+}
+
+.actions td {
+	padding-left: 0em;
+	padding-right: 0em;
+}
+
+input {
+	width: calc(100% - 0.4rem);
+	font-family: inherit;
+	font-size: inherit;
+}
+
+input[type="color"] {
+	height: 24pt;
+}
+
+select {
+	width: 100%;
+	font-family: inherit;
+	font-size: inherit;
+}
+
+button {
+	margin: 0.3rem 0 0.3rem 0;
+	min-height: 1.9rem;
+	font-family: inherit;
+	font-size: inherit;
+}
+
+#status {
+	word-wrap: break-word;
+	overflow-wrap: break-word;
+}
+
+@media only screen and (min-resolution: 200dpi) {
+	body {
+		font-size: 36pt;
+	}
+	table {
+		width: 90%;
+	}
+	input[type="color"] {
+		height: 48pt;
+	}
+	.spacer {
+		height: 0.8rem;
+	}
+}
+
+@media only screen and (min-resolution: 300dpi) {
+	body {
+		font-size: 54pt;
+	}
+	input[type="color"] {
+		height: 72pt;
+	}
+	.spacer {
+		height: 1.2rem;
+	}
+}
+</style>
+</head>
+<body>
+
+<table border="0">
+<tr><th colspan="2" class="title">MDNS</td></tr>
+<tr class="param"><td>Host</td><td><input type="text" id="mdns.host"/></td></tr>
+<tr class="spacer"></tr>
+<tr><th colspan="2" class="title">NTP</td></tr>
+<tr class="param"><td>Timeout [ms]</td><td><input type="number" id="ntp.timeout" min="0" max="65535"/></td></tr>
+<tr class="param"><td>Server</td><td><input type="text" id="ntp.server"/></td></tr>
+<tr class="spacer"></tr>
+<tr><th colspan="2" class="title">Clock</td></tr>
+<tr class="param"><td>Pass Color</td><td><input type="color" id="clock.passColor"/></td></tr>
+<tr class="param"><td>Fail Color</td><td><input type="color" id="clock.failColor"/></td></tr>
+<tr class="param"><td>Pass From</td><td><input type="text" id="clock.passFrom"/></td></tr>
+<tr class="param"><td>Pass To</td><td><input type="text" id="clock.passTo"/></td></tr>
+<tr class="param"><td>Type</td><td><select id="clock.type">
+	<option value="digital">Digital</option>
+	<option value="analog">Analog</option>
+</select></td></tr>
+<tr class="spacer"></tr>
+<tr class="actions"><td colspan="2" style="text-align: center">
+	<button id="save" type="button" style="float: left">Save</button>
+	<button id="load" type="button">Load</button>
+	<button id="reboot" type="button" style="float: right">Reboot</button>
+</td></tr>
+<tr class="spacer"></tr>
+<tr><td colspan="2" id="status"></td></tr>
+</table>
+
+<script>
+(function () {
+	/* HTML elements */
+	var eMdnsHost = document.getElementById('mdns.host');
+	var eNtpTimeout = document.getElementById('ntp.timeout');
+	var eNtpServer = document.getElementById('ntp.server');
+	var eClockPassColor = document.getElementById('clock.passColor');
+	var eClockFailColor = document.getElementById('clock.failColor');
+	var eClockPassFrom = document.getElementById('clock.passFrom');
+	var eClockPassTo = document.getElementById('clock.passTo');
+	var eClockType = document.getElementById('clock.type');
+	var eSave = document.getElementById('save');
+	var eLoad = document.getElementById('load');
+	var eReboot = document.getElementById('reboot');
+	var eStatus = document.getElementById('status');
+
+	/* Colors */
+	const cOk = '#4B2';
+	const cFail = '#B42';
+
+	/* Sets a specific HTML element from JSON. */
+	var setParam = function (obj, group, key) {
+		if (obj && obj.hasOwnProperty(group)) {
+			g = obj[group];
+			if ( g.hasOwnProperty(key) ) {
+				document.getElementById(group + '.' + key).value = g[key];
+			}
+		}
+	};
+
+	/* Loads the configuration from the server and displays the result. */
+	var loadConfig = null;
+	var retryTimer = null;
+	loadConfig = function () {
+		fetch('/config', {
+			method: 'GET',
+			headers: {
+				'Accept': 'application/json',
+				'Content-Type': 'text/plain'
+			}
+		}).then(function (response) {
+			response.json().then(function (res) {
+				setParam(res, 'mdns', 'host');
+				setParam(res, 'ntp', 'timeout');
+				setParam(res, 'ntp', 'server');
+				setParam(res, 'clock', 'passColor');
+				setParam(res, 'clock', 'failColor');
+				setParam(res, 'clock', 'passFrom');
+				setParam(res, 'clock', 'passTo');
+				setParam(res, 'clock', 'type');
+			}).catch(function (reason) {
+				console.log('Error parsing configuration from server: ' + reason);
+			})
+			if (retryTimer != null) {
+				clearTimeout(retryTimer);
+				retryTimer = null;
+			}
+		}).catch(function (reason) {
+			console.log('Error loading configuration from server: ' + reason);
+			retryTimer = setTimeout(
+				function () {
+					loadConfig();
+				},
+				3000
+			);
+		})
+	};
+
+	/* Returns the RGB565 color from the given color picker. */
+	var getColor = function (element) {
+		const colorStr = element.value;
+		const r = parseInt(colorStr.slice(1, 3), 16);
+		const g = parseInt(colorStr.slice(3, 5), 16);
+		const b = parseInt(colorStr.slice(5, 7), 16);
+		const rgb565 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3);
+		return '0x' + rgb565.toString(16).toUpperCase().padStart(4, '0');
+	};
+
+	/* Sets the validation result for the input element by changing the background color. */
+	var setInputOk = function (element, ok) {
+		if ( ok ) {
+			element.parentElement.style.backgroundColor = '#EEE';
+		} else {
+			element.parentElement.style.backgroundColor = cFail;
+		}
+	};
+
+	/* Validates the element value against a regex and sets the parent background color accordingly. */
+	var validateStrInput = function (element, regex) {
+		if ( element.value.match(regex) ) {
+			setInputOk(element, true);
+			return true;
+		}
+		setInputOk(element, false);
+		return false;
+	};
+
+	/* Validates the element value against a range and sets the parent background color accordingly. */
+	var validateIntInput = function (element, from, to) {
+		const value = parseInt(element.value);
+		element.value = value;
+		if (value >= from && value <= to) {
+			setInputOk(element, true);
+			return true;
+		}
+		setInputOk(element, false);
+		return false;
+	};
+
+	/* 'Save' button click handler */
+	eSave.addEventListener('click', function () {
+		/* validate input */
+		var overall = true;
+		overall = validateStrInput(eMdnsHost, /^[a-zA-Z]([0-9a-zA-Z-]{0,61}[0-9a-zA-Z])?$/) && overall;
+		overall = validateIntInput(eNtpTimeout, 1, 65535) && overall;
+		overall = validateStrInput(eNtpServer, /^.{1,255}$/) && overall;
+		overall = validateStrInput(eNtpServer, /^(([a-zA-Z]([0-9a-zA-Z-]{0,61}[0-9a-zA-Z])?(\.[a-zA-Z]([0-9a-zA-Z-]{0,61}[0-9a-zA-Z])?)*)|(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}))$/) && overall; /* domain or host name; IPv4 */
+		overall = validateStrInput(eClockPassColor, /^#[0-9a-fA-F]{6}$/) && overall;
+		overall = validateStrInput(eClockFailColor, /^#[0-9a-fA-F]{6}$/) && overall;
+		overall = validateStrInput(eClockPassFrom, /^([01][0-9]|2[0-3]):([0-5][0-9]|60)$/) && overall;
+		overall = validateStrInput(eClockPassTo, /^([01][0-9]|2[0-3]):([0-5][0-9]|60)$/) && overall;
+		if ( overall ) {
+			eStatus.innerText = '';
+		} else {
+			eStatus.innerText = 'Invalid configuration values.';
+			eStatus.style.color = cFail;
+			return;
+		}
+		/* construct configuration format */
+		var data = '';
+		data += '[MDNS]\n';
+		data += '\n';
+		data += '# host name for domain .local\n';
+		data += 'HOST = "' + eMdnsHost.value + '"\n';
+		data += '\n';
+		data += '[NTP]\n';
+		data += '\n';
+		data += '# milliseconds\n';
+		data += 'TIMEOUT = ' + eNtpTimeout.value + '\n';
+		data += '# host name or IPv4 address\n';
+		data += 'SERVER = "' + eNtpServer.value + '"\n';
+		data += '\n';
+		data += '[CLOCK]\n';
+		data += '\n';
+		data += '# RGB565\n';
+		data += 'PASS_COLOR = ' + getColor(eClockPassColor) + '\n';
+		data += '# RGB565\n';
+		data += 'FAIL_COLOR = ' + getColor(eClockFailColor) + '\n';
+		data += '# HH:MM\n';
+		data += 'PASS_FROM = "' + eClockPassFrom.value + '"\n';
+		data += '# HH:MM\n';
+		data += 'PASS_TO = "' + eClockPassTo.value + '"\n';
+		data += '# digital, analog\n';
+		data += 'TYPE = "' + eClockType.options[eClockType.selectedIndex].value + '"\n';
+		/* send new configuration to server */
+		fetch('/config', {
+			method: 'POST',
+			cache: 'no-cache',
+			headers: { 'Content-Type': 'text/plain' },
+			body: data
+		}).then(function (response) {
+			eStatus.innerText = 'Configuration saved.';
+			eStatus.style.color = cOk;
+		}).catch(function (reason) {
+			eStatus.innerText = 'Failed saving the new configuration. ' + reason.message;
+			eStatus.style.color = cFail;
+		});
+	});
+
+	/* 'Load' button click handler */
+	eLoad.addEventListener('click', function () {
+		if (retryTimer != null) {
+			clearTimeout(retryTimer);
+			retryTimer = null;
+		}
+		loadConfig();
+		eStatus.innerText = '';
+	});
+
+	/* 'Reboot' button click handler */
+	eReboot.addEventListener('click', function () {
+		fetch('/reboot', {
+			method: 'POST',
+			cache: 'no-cache'
+		}).then(function (response) {
+			eStatus.innerText = 'Reboot sent.';
+			eStatus.style.color = cOk;
+		}).catch(function (reason) {
+			eStatus.innerText = 'Reboot failed. ' + reason.message;
+			eStatus.style.color = cFail;
+		});
+	});
+
+	/* Load initial configuration. */
+	loadConfig();
+}());
+</script>
+</body>
+</html>
