@@ -41,11 +41,13 @@ jobs:
       run: |
         sed -i 's/ -Wl,-Bstatic//g' platformio.ini
         pio test -e native
-    - name: Upload Artifact
+    - name: Upload Build Artifact
       uses: actions/upload-artifact@v3
       with:
-        name: binaries
-        path: |
-          .pio/build/ttgo-t4-v13/firmware.elf
-          .pio/build/ttgo-t4-v13/firmware.bin
-          .pio/coverage
+        name: firmware
+        path: .pio/build/ttgo-t4-v13/firmware.*
+    - name: Upload Coverage Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage
+        path: .pio/coverage
