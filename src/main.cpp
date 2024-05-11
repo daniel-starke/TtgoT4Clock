@@ -2,7 +2,7 @@
  * @file main.cpp
  * @author Daniel Starke
  * @date 2024-03-24
- * @version 2024-05-09
+ * @version 2024-05-11
  *
  * Copyright (c) 2024 Daniel Starke
  *
@@ -857,6 +857,7 @@ void setup() {
 	"type": "%s"
 }})";
 		AsyncResponseStream * response = request->beginResponseStream("application/json");
+		response->addHeader("Cache-Control", "no-cache");
 		response->printf(fmt,
 			config.mdnsHost,
 			config.ntpTimeout,
@@ -1033,9 +1034,7 @@ void loop() {
 #define LOOP_DELAY_MS 1000
 	const bool lockTaken = (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE);
 	State newState = state;
-	if ( lockTaken ) {
-		xSemaphoreGive(mutex);
-	}
+	const bool clockChanged = newState.clockChanged;
 	newState.clockChanged = false;
 	newState.configChanged = false;
 	newState.wifiOnline = (WiFi.status() == WL_CONNECTED);
@@ -1067,10 +1066,24 @@ void loop() {
 		newState.updateNtp();
 	}
 	if (memcmp(&state, &newState, sizeof(newState)) != 0) {
-		/* state changed -> update display */
+		/* state changed */
+		if ( state.configChanged ) {
+			/* Store updated configuration.
+			 * This is not done within the web server to as it takes long and
+			 * degenerates the flash if done too often.
+			 */
+			if ( ! config.store() ) {
+				log_e("Failed to store new configuration on flash.");
+			}
+		}
+		state = newState;
+		if ( lockTaken ) {
+			xSemaphoreGive(mutex);
+		}
+		/* update display */
 		if (config.clockType[0] == 'd') {
 			/* display digital clock */
-			if ( state.clockChanged ) {
+			if ( clockChanged ) {
 				tft.fillScreen(TFT_BLACK);
 			}
 			tft.setTextColor(
@@ -1112,20 +1125,10 @@ void loop() {
 			svgSetPaths("hour", svgPathsHour);
 			svgSetPaths("min", svgPathsMin);
 		}
-		if (xSemaphoreTake(mutex, portMAX_DELAY) == pdTRUE) {
-			if ( state.configChanged ) {
-				/* Store updated configuration.
-				 * This is not done within the web server to as it takes long and
-				 * degenerates the flash if done too often.
-				 */
-				if ( ! config.store() ) {
-					log_e("Failed to store new configuration on flash.");
-				}
-			}
-			state = newState;
+	} else {
+		if ( lockTaken ) {
 			xSemaphoreGive(mutex);
 		}
-	} else {
 		/* keep power consumption low by doing less updates */
 		delay(LOOP_DELAY_MS);
 	}
